@@ -1,11 +1,14 @@
-# Helper function to select files based on criteria
+# ~/.zsh_functions/git_helpers.zsh
+
+# Helper function to select files based on criteria and optional file extension
 git_select_files() {
   local criteria="$1"
   local prompt="$2"
-  local repo_root selected_files files
+  local file_extension="$3"
+  local repo_root selected_files files all_option="ALL"
 
   # Determine the repository root
-  repo_root=$(git rev-parse --show-toplevel)
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
   if [[ $? -ne 0 ]]; then
     echo "Error: Not inside a Git repository."
     return 1
@@ -17,10 +20,20 @@ git_select_files() {
   if [[ "$criteria" == "changed" ]]; then
     # List all changed files (both staged and unstaged)
     # This includes modified, added, deleted, renamed, and copied files
-    files=($(git status --short | awk '{print $2}'))
+    if [[ -n "$file_extension" ]]; then
+      # Filter files by the provided extension
+      files=($(git status --short | awk '{print $2}' | grep "\.${file_extension}$"))
+    else
+      files=($(git status --short | awk '{print $2}'))
+    fi
   elif [[ "$criteria" == "staged" ]]; then
     # List all staged files
-    files=($(git diff --name-only --cached))
+    if [[ -n "$file_extension" ]]; then
+      # Filter staged files by the provided extension
+      files=($(git diff --name-only --cached | grep "\.${file_extension}$"))
+    else
+      files=($(git diff --name-only --cached))
+    fi
   else
     echo "Error: Unknown criteria '$criteria'. Use 'changed' or 'staged'."
     popd > /dev/null
@@ -29,42 +42,53 @@ git_select_files() {
 
   # Check if there are any files
   if (( ${#files[@]} == 0 )); then
-    echo "No files available for the criteria '$criteria'."
+    echo "No files available for the criteria '$criteria'${file_extension:+ with extension '.$file_extension'}."
     popd > /dev/null
     return 0
   fi
 
-  # Use fzf to select multiple files
-  selected_files=($(printf '%s\n' "${files[@]}" | fzf --multi --prompt="$prompt: " --height 40% --layout=reverse --info=inline))
+  # Prepend the "ALL" option to the files list
+  # This allows users to select "ALL" to operate on all files without individual selection
+  local fzf_input
+  fzf_input=("$all_option" "${files[@]}")
 
-  # If no files were selected, exit
+  # Use fzf to select multiple files
+  selected_files=($(printf '%s\n' "${fzf_input[@]}" | fzf --multi --prompt="$prompt: " --height 40% --layout=reverse --info=inline))
+
+  # Return to the original directory
+  popd > /dev/null
+
+  # Check if "ALL" was selected
+  for selected in "${selected_files[@]}"; do
+    if [[ "$selected" == "$all_option" ]]; then
+      # If "ALL" is selected, return all files
+      printf '%s\n' "${files[@]}"
+      return 0
+    fi
+  done
+
+  # If "ALL" was not selected, return the selected files
   if (( ${#selected_files[@]} == 0 )); then
     echo ""
-    popd > /dev/null
     return 0
   fi
 
   # Output selected files, each on a new line
   printf '%s\n' "${selected_files[@]}"
-
-  # Return to the original directory
-  popd > /dev/null
 }
 
 # Function to interactively select multiple changed files and stage them using fzf
+# Accepts an optional file extension (e.g., "cs", "json", "yaml")
 gadd() {
   local -a selected_files
-  local repo_root
-
-  # Determine the repository root
-  repo_root=$(git rev-parse --show-toplevel)
-  if [[ $? -ne 0 ]]; then
-    echo "Error: Not inside a Git repository."
-    return 1
-  fi
+  local repo_root file_extension="$1"
 
   # Capture the selected files into an array
-  selected_files=("${(@f)$(git_select_files "changed" "Select file(s) to stage")}")
+  if [[ -n "$file_extension" ]]; then
+    selected_files=("${(@f)$(git_select_files "changed" "Select file(s) to stage" "$file_extension")}")
+  else
+    selected_files=("${(@f)$(git_select_files "changed" "Select file(s) to stage")}")
+  fi
 
   # If no files were selected, exit
   if (( ${#selected_files[@]} == 0 )); then
@@ -80,7 +104,7 @@ gadd() {
   echo ""
 
   # Stage the selected files
-  git -C "$repo_root" add -- "${selected_files[@]}"
+  git add -- "${selected_files[@]}"
 
   # Check if the git add command was successful
   if [[ $? -eq 0 ]]; then
@@ -91,19 +115,17 @@ gadd() {
 }
 
 # Function to interactively select multiple changed files and view their diffs using fzf
+# Accepts an optional file extension (e.g., "cs", "json", "yaml")
 gdf() {
   local -a selected_files
-  local repo_root
-
-  # Determine the repository root
-  repo_root=$(git rev-parse --show-toplevel)
-  if [[ $? -ne 0 ]]; then
-    echo "Error: Not inside a Git repository."
-    return 1
-  fi
+  local repo_root file_extension="$1"
 
   # Capture the selected files into an array
-  selected_files=("${(@f)$(git_select_files "changed" "Select file(s) for git diff")}")
+  if [[ -n "$file_extension" ]]; then
+    selected_files=("${(@f)$(git_select_files "changed" "Select file(s) for git diff" "$file_extension")}")
+  else
+    selected_files=("${(@f)$(git_select_files "changed" "Select file(s) for git diff")}")
+  fi
 
   # If no files were selected, exit
   if (( ${#selected_files[@]} == 0 )); then
@@ -119,28 +141,40 @@ gdf() {
   echo ""
 
   # Run git diff on the selected files
-  git -C "$repo_root" diff -- "${selected_files[@]}"
+  git diff -- "${selected_files[@]}"
 }
 
 # Function to interactively select multiple staged files and unstage them using fzf
 # If the argument "all" is provided, unstage all staged files without prompting
+# Accepts an optional file extension (e.g., "cs", "json", "yaml")
 gunstage() {
   local -a selected_files
-  local repo_root
+  local repo_root file_extension="$1"
+  local unstage_all=false
 
-  # Determine the repository root
-  repo_root=$(git rev-parse --show-toplevel)
-  if [[ $? -ne 0 ]]; then
-    echo "Error: Not inside a Git repository."
-    return 1
+  # Check if the first argument is "all"
+  if [[ "$1" == "all" ]]; then
+    unstage_all=true
+    file_extension="$2"  # Shift the file extension if provided
   fi
 
-  if [[ "$1" == "all" ]]; then
+  if $unstage_all; then
     # Unstage all staged files
     echo "Unstaging all staged files..."
 
+    # Determine the repository root
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [[ $? -ne 0 ]]; then
+      echo "Error: Not inside a Git repository."
+      return 1
+    fi
+
     # Retrieve all staged files
-    selected_files=($(git -C "$repo_root" diff --name-only --cached))
+    if [[ -n "$file_extension" ]]; then
+      selected_files=($(git diff --name-only --cached | grep "\.${file_extension}$"))
+    else
+      selected_files=($(git diff --name-only --cached))
+    fi
 
     # Check if there are any staged files
     if (( ${#selected_files[@]} == 0 )); then
@@ -156,10 +190,10 @@ gunstage() {
     echo ""
 
     # Unstage all files
-    git -C "$repo_root" restore --staged -- "${selected_files[@]}"
+    git restore --staged -- "${selected_files[@]}"
 
     # Alternative for older Git versions:
-    # git -C "$repo_root" reset HEAD -- "${selected_files[@]}"
+    # git reset HEAD -- "${selected_files[@]}"
 
     # Check if the git restore command was successful
     if [[ $? -eq 0 ]]; then
@@ -169,8 +203,11 @@ gunstage() {
     fi
   else
     # Interactive selection to unstage specific files
-    # Capture the selected files into an array
-    selected_files=("${(@f)$(git_select_files "staged" "Select file(s) to unstage")}")
+    if [[ -n "$file_extension" ]]; then
+      selected_files=("${(@f)$(git_select_files "staged" "Select file(s) to unstage" "$file_extension")}")
+    else
+      selected_files=("${(@f)$(git_select_files "staged" "Select file(s) to unstage")}")
+    fi
 
     # If no files were selected, exit
     if (( ${#selected_files[@]} == 0 )); then
@@ -186,10 +223,10 @@ gunstage() {
     echo ""
 
     # Unstage the selected files
-    git -C "$repo_root" restore --staged -- "${selected_files[@]}"
+    git restore --staged -- "${selected_files[@]}"
 
     # Alternative for older Git versions:
-    # git -C "$repo_root" reset HEAD -- "${selected_files[@]}"
+    # git reset HEAD -- "${selected_files[@]}"
 
     # Check if the git restore command was successful
     if [[ $? -eq 0 ]]; then
