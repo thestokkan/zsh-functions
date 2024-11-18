@@ -6,6 +6,11 @@ gdf() {
   local -a selected_files
   local repo_root file_extension="$1"
 
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+
+  # Navigate to the repository root to ensure consistent path handling
+    pushd "$repo_root" > /dev/null || return 1
+
   # Capture the selected files into an array
   if [[ -n "$file_extension" ]]; then
     selected_files=("${(@f)$(git_select_files "changed" "Select file(s) for git diff" "$file_extension")}")
@@ -28,4 +33,7 @@ gdf() {
 
   # Run git diff on the selected files
   git diff -- "${selected_files[@]}"
+
+  # Return to the original directory
+  popd > /dev/null || return 1
 }

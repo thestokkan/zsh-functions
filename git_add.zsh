@@ -4,7 +4,12 @@
 # Accepts an optional file extension (e.g., "cs", "json", "yaml")
 gadd() {
   local -a selected_files
-  export repo_root file_extension="$1"
+  local repo_root file_extension="$1"
+
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+
+# Navigate to the repository root to ensure consistent path handling
+  pushd "$repo_root" > /dev/null || return 1
 
   # Capture the selected files into an array
   if [[ -n "$file_extension" ]]; then
@@ -35,4 +40,7 @@ gadd() {
   else
     echo "Failed to stage some or all selected files."
   fi
+
+  # Return to the original directory
+    popd > /dev/null || return 1
 }

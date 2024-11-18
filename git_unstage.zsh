@@ -8,6 +8,11 @@ gunstage() {
   local repo_root file_extension="$1"
   local unstage_all=false
 
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+
+  # Navigate to the repository root to ensure consistent path handling
+    pushd "$repo_root" > /dev/null || return 1
+
   # Check if the first argument is "all"
   if [[ "$1" == "all" ]]; then
     unstage_all=true
@@ -92,4 +97,7 @@ gunstage() {
       echo "Failed to unstage some or all selected files."
     fi
   fi
+
+  # Return to the original directory
+      popd > /dev/null || return 1
 }

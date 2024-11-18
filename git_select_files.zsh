@@ -14,7 +14,7 @@ git_select_files() {
     return 1
   fi
 
-  # Navigate to the repository root to ensure consistent path handling
+  # Save current directory and navigate to the repository root to ensure consistent path handling
   pushd "$repo_root" > /dev/null || return 1
 
   if [[ "$criteria" == "changed" ]]; then
@@ -55,7 +55,7 @@ git_select_files() {
   # Check if there are any files
   if (( ${#files[@]} == 0 )); then
     echo "No files available for the criteria '$criteria'${file_extension:+ with extension '.$file_extension'}."
-    popd > /dev/null
+    popd > /dev/null || return 1
     return 0
   fi
 
@@ -68,7 +68,7 @@ git_select_files() {
   selected_files=($(printf '%s\n' "${fzf_input[@]}" | fzf --multi --prompt="$prompt: " --height 40% --layout=reverse --info=inline))
 
   # Return to the original directory
-  popd > /dev/null
+  popd > /dev/null || return 1
 
   # Check if "ALL" was selected
   for selected in "${selected_files[@]}"; do

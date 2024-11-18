@@ -7,6 +7,11 @@ gcommit() {
   export repo_root file_extension="$1"
   local commit_message
 
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+
+  # Navigate to the repository root to ensure consistent path handling
+    pushd "$repo_root" > /dev/null || return 1
+
   # Capture the selected files into an array
   if [[ -n "$file_extension" ]]; then
     selected_files=("${(@f)$(git_select_files "staged" "Select file(s) to commit" "$file_extension")}")
@@ -37,4 +42,7 @@ gcommit() {
   else
     echo "Failed to commit the selected file(s)."
   fi
+
+  # Return to the original directory
+      popd > /dev/null || return 1
 }
