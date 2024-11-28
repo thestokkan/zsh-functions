@@ -11,7 +11,8 @@ gunstage() {
     repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
 
   # Navigate to the repository root to ensure consistent path handling
-    pushd "$repo_root" > /dev/null || return 1
+  dirs -c
+  pushd "$repo_root" > /dev/null || return 1
 
   # Check if the first argument is "all"
   if [[ "$1" == "all" ]]; then
@@ -99,5 +100,7 @@ gunstage() {
   fi
 
   # Return to the original directory
+  if [[ $(dirs -v | wc -l) -gt 1 ]]; then
       popd > /dev/null || return 1
+  fi
 }

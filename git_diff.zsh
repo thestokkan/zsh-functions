@@ -9,7 +9,8 @@ gdf() {
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
 
   # Navigate to the repository root to ensure consistent path handling
-    pushd "$repo_root" > /dev/null || return 1
+  dirs -c
+  pushd "$repo_root" > /dev/null || return 1
 
   # Capture the selected files into an array
   if [[ -n "$file_extension" ]]; then
@@ -35,5 +36,7 @@ gdf() {
   git diff -- "${selected_files[@]}"
 
   # Return to the original directory
-  popd > /dev/null || return 1
+  if [[ $(dirs -v | wc -l) -gt 1 ]]; then
+      popd > /dev/null || return 1
+  fi
 }

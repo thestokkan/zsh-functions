@@ -75,10 +75,6 @@ git_select_files() {
   # Use fzf to select multiple files
   selected_files=($(printf '%s\n' "${fzf_input[@]}" | fzf --multi --prompt="$prompt: " --height 40% --layout=reverse --info=inline))
 
-  if [[ $(dirs -v | wc -l) -gt 1 ]]; then
-    popd > /dev/null || return 1
-  fi
-
   # Check if "ALL" was selected
   for selected in "${selected_files[@]}"; do
     if [[ "$selected" == "$all_option" ]]; then
@@ -96,4 +92,8 @@ git_select_files() {
 
   # Output selected files, each on a new line
   printf '%s\n' "${selected_files[@]}"
+
+  if [[ $(dirs -v | wc -l) -gt 1 ]]; then
+      popd > /dev/null || return 1
+  fi
 }
