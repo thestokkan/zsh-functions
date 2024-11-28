@@ -14,8 +14,12 @@ git_select_files() {
     return 1
   fi
 
-  # Save current directory and navigate to the repository root to ensure consistent path handling
-  pushd "$repo_root" > /dev/null || return 1
+  # If not inside repo root, save current directory and navigate to the repository root to ensure consistent path handling
+  # Clear the directory stack first
+  dirs -c
+  if [[ "$PWD" != "$repo_root" ]]; then
+    pushd "$repo_root" > /dev/null || return 1
+  fi
 
   if [[ "$criteria" == "changed" ]]; then
     # List all changed files (both staged and unstaged)
@@ -48,14 +52,18 @@ git_select_files() {
     files=("${changed[@]}" "${untracked[@]}")
   else
     echo "Error: Unknown criteria '$criteria'. Use 'changed', 'staged', or 'unstaged'."
-    popd > /dev/null
+    if [[ $(dirs -v | wc -l) -gt 1 ]]; then
+      popd > /dev/null || return 1
+    fi
     return 1
   fi
 
   # Check if there are any files
   if (( ${#files[@]} == 0 )); then
     echo "No files available for the criteria '$criteria'${file_extension:+ with extension '.$file_extension'}."
-    popd > /dev/null || return 1
+    if [[ $(dirs -v | wc -l) -gt 1 ]]; then
+      popd > /dev/null || return 1
+    fi
     return 0
   fi
 
@@ -67,8 +75,9 @@ git_select_files() {
   # Use fzf to select multiple files
   selected_files=($(printf '%s\n' "${fzf_input[@]}" | fzf --multi --prompt="$prompt: " --height 40% --layout=reverse --info=inline))
 
-  # Return to the original directory
-  popd > /dev/null || return 1
+  if [[ $(dirs -v | wc -l) -gt 1 ]]; then
+    popd > /dev/null || return 1
+  fi
 
   # Check if "ALL" was selected
   for selected in "${selected_files[@]}"; do
