@@ -3,7 +3,7 @@
 # Function to interactively select and delete Git branches using fzf
 # Excludes 'main', 'master', and the current branch from the selection
 # Prompts extra confirmation before force deleting branches
-gdelbranch() {
+gbdel() {
   local pattern="$1"
   local branches selected_branches confirm
 
@@ -48,8 +48,7 @@ gdelbranch() {
   done
   echo ""
 
-  # Confirm deletion
-  read -p "Are you sure you want to delete the selected branch(es)? [y/N]: " confirm
+  read "confirm?Are you sure you want to delete the selected branch(es)? [y/N]: "
   if [[ "$confirm" != [yY] ]]; then
     echo "Deletion aborted."
     return 0
@@ -60,7 +59,7 @@ gdelbranch() {
     git branch -d "$branch" 2>/dev/null
     if [[ $? -ne 0 ]]; then
       # Prompt before force deleting
-      read -p "Branch '$branch' has unmerged changes. Force delete? [y/N]: " force_confirm
+      read "force_confirm?Branch '$branch' has unmerged changes. Force delete? [y/N]: "
       if [[ "$force_confirm" == [yY] ]]; then
         git branch -D "$branch"
         if [[ $? -eq 0 ]]; then
